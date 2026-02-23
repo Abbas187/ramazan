@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Clock, Bell } from 'lucide-react';
-import { format, addMinutes, isAfter, parse } from 'date-fns';
-import { getPrayerTimes } from '../services/api';
+import { motion } from 'framer-motion';
+import { CheckCircle2, Circle, Clock, ChevronLeft, BellRing } from 'lucide-react';
+import { format, parse, isAfter, addMinutes } from 'date-fns';
 
 interface PrayerTimesProps {
     location: { city: string; country: string } | null;
+    onBack: () => void;
 }
 
 interface Prayer {
@@ -14,120 +15,109 @@ interface Prayer {
     reminderSent: boolean;
 }
 
-const PrayerTimes: React.FC<PrayerTimesProps> = ({ location }) => {
-    const [prayers, setPrayers] = useState<Prayer[]>([]);
-    const [loading, setLoading] = useState(true);
+const PrayerTimes: React.FC<PrayerTimesProps> = ({ onBack }) => {
+    const [prayers, setPrayers] = useState<Prayer[]>(() => {
+        const saved = localStorage.getItem('dailyPrayers_v2');
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const savedDate = localStorage.getItem('lastPrayerDate_v2');
+
+        if (savedDate === today && saved) return JSON.parse(saved);
+
+        // Specific Hardcoded Timings
+        return [
+            { name: 'Fajr', time: '05:50', completed: false, reminderSent: false },
+            { name: 'Dhuhr', time: '13:30', completed: false, reminderSent: false },
+            { name: 'Asr', time: '16:45', completed: false, reminderSent: false },
+            { name: 'Maghrib', time: '18:25', completed: false, reminderSent: false }, // Placeholder for Iftar + 15
+            { name: 'Isha', time: '19:45', completed: false, reminderSent: false },
+        ];
+    });
 
     useEffect(() => {
-        const fetchTimes = async () => {
-            if (!location) return;
-
-            const savedPrayers = localStorage.getItem('dailyPrayers');
-            const today = format(new Date(), 'yyyy-MM-dd');
-            const savedDate = localStorage.getItem('lastPrayerDate');
-
-            if (savedDate === today && savedPrayers) {
-                setPrayers(JSON.parse(savedPrayers));
-                setLoading(false);
-                return;
-            }
-
-            const times = await getPrayerTimes(location.city, location.country);
-            if (times) {
-                const prayerList: Prayer[] = [
-                    { name: 'Fajr', time: times.Fajr, completed: false, reminderSent: false },
-                    { name: 'Dhuhr', time: times.Dhuhr, completed: false, reminderSent: false },
-                    { name: 'Asr', time: times.Asr, completed: false, reminderSent: false },
-                    { name: 'Maghrib', time: times.Maghrib, completed: false, reminderSent: false },
-                    { name: 'Isha', time: times.Isha, completed: false, reminderSent: false },
-                ];
-                setPrayers(prayerList);
-                localStorage.setItem('dailyPrayers', JSON.stringify(prayerList));
-                localStorage.setItem('lastPrayerDate', today);
-            }
-            setLoading(false);
-        };
-
-        fetchTimes();
-    }, [location]);
-
-    // Check for 30-minute follow-ups
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const now = new Date();
-            const updatedPrayers = prayers.map(prayer => {
-                if (!prayer.completed && !prayer.reminderSent) {
-                    const prayerTime = parse(prayer.time, 'HH:mm', new Date());
-                    const reminderTime = addMinutes(prayerTime, 30);
-
-                    if (isAfter(now, reminderTime)) {
-                        // In a real app, this would trigger a notification
-                        console.log(`Reminder: Did you pray ${prayer.name}?`);
-                        return { ...prayer, reminderSent: true };
-                    }
-                }
-                return prayer;
-            });
-
-            if (JSON.stringify(updatedPrayers) !== JSON.stringify(prayers)) {
-                setPrayers(updatedPrayers);
-                localStorage.setItem('dailyPrayers', JSON.stringify(updatedPrayers));
-            }
-        }, 60000); // Check every minute
-
-        return () => clearInterval(interval);
+        localStorage.setItem('dailyPrayers_v2', JSON.stringify(prayers));
+        localStorage.setItem('lastPrayerDate_v2', format(new Date(), 'yyyy-MM-dd'));
     }, [prayers]);
 
     const togglePrayer = (index: number) => {
         const newPrayers = [...prayers];
         newPrayers[index].completed = !newPrayers[index].completed;
         setPrayers(newPrayers);
-        localStorage.setItem('dailyPrayers', JSON.stringify(newPrayers));
     };
 
-    if (loading) return <div className="p-8 text-center text-primary-gold">Calculating Prayer Times...</div>;
-
     return (
-        <div className="glass-card p-6 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl gold-text flex items-center gap-2">
-                    <Clock className="text-primary-gold" size={20} />
-                    Daily Prayers
-                </h2>
-                <span className="text-xs text-text-secondary">{format(new Date(), 'EEEE, do MMMM')}</span>
+        <div className="space-y-6">
+            <div className="flex items-center gap-4">
+                <button onClick={onBack} className="p-2 bg-white/5 rounded-xl border border-white/10 text-text-secondary">
+                    <ChevronLeft />
+                </button>
+                <h2 className="text-2xl gold-glow font-bold">Prayer Times</h2>
             </div>
 
-            <div className="space-y-3">
+            <div className="premium-card p-4 space-y-3">
                 {prayers.map((prayer, index) => (
-                    <button
+                    <motion.button
                         key={prayer.name}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
                         onClick={() => togglePrayer(index)}
-                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${prayer.completed
-                                ? 'bg-emerald/30 border-emerald text-emerald-light'
-                                : 'bg-white/5 border-glass-border hover:bg-white/10'
+                        className={`w-full flex items-center justify-between p-5 rounded-2xl border transition-all relative overflow-hidden group ${prayer.completed
+                                ? 'bg-emerald/20 border-emerald-glow/30'
+                                : 'bg-white/5 border-white/10 hover:border-primary-gold/30'
                             }`}
                     >
-                        <div className="flex items-center gap-3">
-                            {prayer.completed ? (
-                                <CheckCircle2 size={24} className="text-emerald-light" />
-                            ) : (
-                                <Circle size={24} className="text-text-secondary" />
-                            )}
+                        {prayer.completed && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.5 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="absolute inset-0 bg-emerald-glow/5 pointer-events-none shadow-[inset_0_0_30px_rgba(16,185,129,0.1)]"
+                            />
+                        )}
+
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className={`p-2 rounded-full transition-colors ${prayer.completed ? 'bg-emerald-glow text-midnight-teal' : 'bg-white/10 text-text-secondary'}`}>
+                                {prayer.completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                            </div>
                             <div className="text-left">
-                                <p className={`font-semibold ${prayer.completed ? 'text-emerald-light' : 'text-text-primary'}`}>
+                                <p className={`text-lg font-bold ${prayer.completed ? 'text-emerald-glow' : 'text-text-primary'}`}>
                                     {prayer.name}
                                 </p>
-                                <p className="text-xs text-text-secondary">{prayer.time}</p>
+                                <div className="flex items-center gap-1.5 text-text-secondary mt-0.5">
+                                    <Clock size={12} className="text-primary-gold" />
+                                    <span className="text-xs font-medium">{prayer.time}</span>
+                                </div>
                             </div>
                         </div>
-                        {prayer.reminderSent && !prayer.completed && (
-                            <div className="flex items-center gap-1 text-[10px] text-primary-gold animate-pulse">
-                                <Bell size={12} />
-                                <span>Follow-up</span>
+
+                        {!prayer.completed && (
+                            <div className="relative z-10 p-2 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-text-secondary uppercase tracking-widest group-hover:text-primary-gold transition-colors">
+                                Check
                             </div>
                         )}
-                    </button>
+
+                        {prayer.completed && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="relative z-10 px-3 py-1 bg-emerald-glow/20 rounded-full text-[9px] font-bold text-emerald-glow uppercase tracking-widest"
+                            >
+                                Allah Accepted
+                            </motion.div>
+                        )}
+                    </motion.button>
                 ))}
+            </div>
+
+            <div className="premium-card p-6 border-emerald-glow/20 flex items-center gap-4">
+                <div className="p-3 bg-emerald-glow/10 rounded-2xl text-emerald-glow">
+                    <BellRing size={24} />
+                </div>
+                <div>
+                    <h4 className="text-sm font-bold text-text-primary leading-tight">Post-Prayer Reminders</h4>
+                    <p className="text-[10px] text-text-secondary mt-1 leading-relaxed">
+                        We will nudge you 30 minutes after each prayer time to ensure you stay on track with your goals.
+                    </p>
+                </div>
             </div>
         </div>
     );
